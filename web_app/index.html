@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WASM Integrated Architecture</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=Fira+Code&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="background-effects">
+        <div class="glow glow-1"></div>
+        <div class="glow glow-2"></div>
+    </div>
+    
+    <div class="container">
+        <header>
+            <h1>WASM <span class="highlight">Integrated Architecture</span></h1>
+            <p>End-to-End System Design: C++ → Rust → WebAssembly</p>
+        </header>
+
+        <main class="grid-layout">
+            <!-- C++ Module Section -->
+            <section class="card glass-panel" id="cpp-card">
+                <div class="card-header">
+                    <h2>C++ Module (Emscripten)</h2>
+                    <span class="status badge-pending" id="cpp-status">Loading...</span>
+                </div>
+                <div class="card-body">
+                    <p class="description">Compute-heavy operations compiled to WASM. Demonstrates performance and sandboxing.</p>
+                    
+                    <div class="control-group">
+                        <label for="fib-input">Fibonacci(n):</label>
+                        <input type="number" id="fib-input" value="40" min="1" max="45">
+                        <button id="btn-cpp-fib" class="btn primary-btn">Calculate</button>
+                    </div>
+                    
+                    <div class="result-box">
+                        <span class="label">Result:</span>
+                        <span id="cpp-result" class="value">-</span>
+                    </div>
+                    <div class="time-box">
+                        <span class="label">Time taken:</span>
+                        <span id="cpp-time" class="value">0ms</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Rust Module Section -->
+            <section class="card glass-panel" id="rust-card">
+                <div class="card-header">
+                    <h2>Rust Module (wasm-pack)</h2>
+                    <span class="status badge-pending" id="rust-status">Loading...</span>
+                </div>
+                <div class="card-body">
+                    <p class="description">Safe memory manipulation and logic compiled to WASM via <code>wasm-bindgen</code>.</p>
+                    
+                    <div class="control-group">
+                        <label for="hash-input">String to Hash:</label>
+                        <input type="text" id="hash-input" value="WebAssembly is awesome!">
+                        <button id="btn-rust-hash" class="btn primary-btn">Process String</button>
+                    </div>
+                    
+                    <div class="result-box">
+                        <span class="label">Result:</span>
+                        <span id="rust-result" class="value">-</span>
+                    </div>
+                    <div class="time-box">
+                        <span class="label">Time taken:</span>
+                        <span id="rust-time" class="value">0ms</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Integrated Pipeline Section -->
+            <section class="card glass-panel full-width">
+                <div class="card-header">
+                    <h2>Multi-Language Pipeline (JS Orchestration)</h2>
+                </div>
+                <div class="card-body">
+                    <p class="description">Demonstrates a JS orchestrator calling C++ for computation, passing the result to Rust for formatting/hashing.</p>
+                    
+                    <div class="pipeline-visual">
+                        <div class="node">JS Initiator</div>
+                        <div class="arrow">→</div>
+                        <div class="node node-cpp">C++ (Compute)</div>
+                        <div class="arrow">→</div>
+                        <div class="node node-rust">Rust (Process)</div>
+                        <div class="arrow">→</div>
+                        <div class="node">JS Display</div>
+                    </div>
+                    
+                    <div class="control-group centered">
+                        <button id="btn-pipeline" class="btn action-btn">Run Full Pipeline</button>
+                    </div>
+                    
+                    <div class="terminal-output" id="pipeline-log">
+                        > Ready for execution...
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- The C++ JS loader (Emscripten generates this) -->
+    <script src="../cpp_wasm/out/math_core.js"></script>
+    <script type="module" src="app.js"></script>
+</body>
+</html>

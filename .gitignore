@@ -1,0 +1,4 @@
+/rust_wasm/target/
+/wasi_app/target/
+node_modules/
+.DS_Store
