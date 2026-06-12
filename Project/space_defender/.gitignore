@@ -1,0 +1,9 @@
+# Build outputs
+build/
+
+# Native test binary
+test_engine
+
+# Object files
+*.o
+*.d
