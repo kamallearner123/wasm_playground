@@ -1,7 +1,102 @@
 # Space Defender 🚀
 ### A Cross-Platform Game — C++ → WebAssembly (Browser) + WASI (Server/Edge)
 
-> **Educational Project**: Demonstrates how a single C++20 codebase compiles to two completely different WebAssembly targets.
+> **Educational Project**: Demonstrates how a single C++20 codebase compiles to two completely different WebAssembly targets — a fully playable browser game and a headless server-side simulation.
+
+---
+
+## ⚡ Quick Start (Already Built)
+
+The game is pre-compiled. To play it immediately:
+
+```bash
+# Step 1: Go to the build output directory
+cd build/browser
+
+# Step 2: Serve it with a local web server
+python3 -m http.server 8081
+
+# Step 3: Open your browser at:
+#   http://localhost:8081
+```
+
+### Controls
+| Key | Action |
+|---|---|
+| `← → ↑ ↓` or `W A S D` | Move spaceship |
+| `Space` | Fire bullets |
+| `R` | Restart game |
+
+> If the `build/browser/` folder does not exist, run `./build_browser.sh` first (requires Emscripten).
+
+---
+
+## 🎯 Project Objective
+
+Space Defender proves a key WebAssembly concept: **write once, compile everywhere**.
+
+The same `engine/`, `ai/`, and `include/` C++ code is compiled into:
+
+| Target | Tool | Output | Runs in |
+|---|---|---|---|
+| **Browser** | Emscripten (`emcc`) | `game.js` + `game.wasm` | Chrome / Firefox |
+| **WASI** | `clang++ --target=wasm32-wasi` | `wasi_defender.wasm` | Wasmtime, Wasmer |
+| **Native** | `g++` | `test_engine` binary | Linux / macOS |
+
+The platform-specific code (rendering, input, file I/O) is isolated to thin adapter layers (`browser/main_browser.cpp` and `wasi/main_wasi.cpp`). The core game logic never changes.
+
+---
+
+## 🏗️ What Each Component Does
+
+### `include/` — Shared Headers
+The blueprint for the entire game. No platform-specific code.
+- **`engine.h`** — Defines `GameEngine`: the main class holding all game state (player, enemies, bullets, power-ups), the fixed-timestep update loop, and render callbacks.
+- **`physics.h`** — Defines `Vec2` (2D vector math), `AABB` (bounding box collision), and `clampf` utility.
+- **`ai.h`** — Defines the `EnemyAI` Finite State Machine with 4 states: `PATROL → CHASE → ATTACK → RETREAT`.
+- **`score.h`** — Defines `ScoreManager` (combo multiplier, high score) and `ObjectPool<T>` (pre-allocated memory pools).
+
+### `engine/engine.cpp` — Game Logic
+The heart of the game. Handles every frame:
+1. Player movement based on input flags
+2. Bullet movement and lifetime
+3. Enemy spawning, sine-wave descent, and shooting
+4. Boss spawning and multi-phase spread shot
+5. Collision detection (player bullets vs enemies, enemy bullets vs player, power-up collection)
+6. Level advancement when enough enemies are killed
+
+### `ai/ai.cpp` — Enemy AI
+A Finite State Machine that decides enemy behavior each frame:
+- **PATROL**: Moves in a sine-wave pattern while descending toward the player.
+- **CHASE**: Rushes directly toward the player when within 250px.
+- **ATTACK**: Hovers and fires repeatedly when within 120px.
+- **RETREAT** *(Boss only)*: Moves away when HP drops below 33%, then transitions back to ATTACK.
+
+### `browser/main_browser.cpp` — Browser Adapter
+The thin Emscripten layer connecting the C++ engine to the browser:
+- `emscripten_set_main_loop()` — syncs the game loop to `requestAnimationFrame` (60fps)
+- `EM_JS` macros — defines `js_drawRect()` and `js_clearCanvas()` which call real HTML5 Canvas 2D API
+- `emscripten_set_keydown/keyup_callback` — captures keyboard input
+- `EMSCRIPTEN_KEEPALIVE` — marks functions like `getScore()`, `resetGame()` as JS-callable exports
+
+### `browser/index.html` — Game UI
+The dark-space themed frontend with:
+- A live HUD showing Score, Health (❤), and Level
+- The HTML5 Canvas where the game renders
+- A **JS ↔ WASM Interop Demo Panel** — click buttons to call C++ functions live from JavaScript
+
+### `wasi/main_wasi.cpp` — WASI Adapter
+Runs the same game engine headlessly (no graphics). Used for:
+- Automated AI simulation (`--frames N`)
+- Saving scores to files on the host filesystem (requires `--dir` capability grant from Wasmtime)
+- Demonstrating the WASI security model (default deny, explicit capability grants)
+
+### `tests/test_engine.cpp` — Unit Tests
+27 unit tests covering:
+- Vec2 math and AABB collision
+- ScoreManager combo/multiplier logic
+- EnemyAI state transitions
+- Full GameEngine lifecycle (init, update, reset)
 
 ---
 
