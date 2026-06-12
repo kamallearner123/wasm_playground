@@ -1,0 +1,3 @@
+/home/kamal/Documents/Concepts/WASM/Project/space_defender/build/browser/CMakeFiles/game.dir
+/home/kamal/Documents/Concepts/WASM/Project/space_defender/build/browser/CMakeFiles/edit_cache.dir
+/home/kamal/Documents/Concepts/WASM/Project/space_defender/build/browser/CMakeFiles/rebuild_cache.dir

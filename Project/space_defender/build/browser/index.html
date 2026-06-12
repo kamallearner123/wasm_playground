@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Space Defender — WASM Edition</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@400;600&display=swap');
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: radial-gradient(ellipse at center, #0d0d2b 0%, #000005 100%);
+      color: #e0e0f0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 1rem;
+    }
+
+    h1 {
+      font-family: 'Orbitron', monospace;
+      font-size: clamp(1.4rem, 4vw, 2.2rem);
+      color: #00e5ff;
+      text-shadow: 0 0 20px #00e5ff88;
+      margin-bottom: 0.5rem;
+      letter-spacing: 4px;
+    }
+
+    .subtitle {
+      font-size: 0.8rem;
+      color: #5c6bc0;
+      margin-bottom: 1rem;
+      letter-spacing: 2px;
+    }
+
+    /* ── HUD ──────────────────────────────────── */
+    .hud {
+      display: flex;
+      gap: 2rem;
+      background: rgba(0, 20, 60, 0.7);
+      border: 1px solid #1a237e;
+      border-radius: 8px;
+      padding: 0.5rem 1.5rem;
+      margin-bottom: 0.75rem;
+      width: 800px;
+      max-width: 100%;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .hud-item { text-align: center; }
+    .hud-label { font-size: 0.65rem; color: #5c6bc0; letter-spacing: 2px; text-transform: uppercase; }
+    .hud-value { font-family: 'Orbitron', monospace; font-size: 1.1rem; color: #00e5ff; }
+    #health    { color: #ef5350; }
+
+    /* ── Canvas ───────────────────────────────── */
+    .canvas-wrapper {
+      position: relative;
+      border: 2px solid #1a237e;
+      border-radius: 4px;
+      box-shadow: 0 0 40px #00e5ff22, inset 0 0 40px #00000088;
+    }
+
+    #gameCanvas {
+      display: block;
+      background: #000;
+    }
+
+    /* ── Overlay (GAME OVER / VICTORY) ─────────── */
+    #overlay {
+      display: none;
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 10, 0.85);
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      border-radius: 4px;
+    }
+
+    #overlayMsg {
+      font-family: 'Orbitron', monospace;
+      font-size: 1.3rem;
+      color: #ef5350;
+      text-shadow: 0 0 20px #ef535088;
+      text-align: center;
+      padding: 1rem;
+    }
+
+    .restart-btn {
+      margin-top: 1rem;
+      background: #1a237e;
+      border: 1px solid #00e5ff;
+      color: #00e5ff;
+      padding: 0.6rem 1.8rem;
+      font-family: 'Orbitron', monospace;
+      font-size: 0.9rem;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .restart-btn:hover { background: #283593; }
+
+    /* ── Controls Help ─────────────────────────── */
+    .controls {
+      margin-top: 0.75rem;
+      font-size: 0.75rem;
+      color: #455a64;
+      letter-spacing: 1px;
+      text-align: center;
+    }
+
+    /* ── JS↔WASM interop panel ─────────────────── */
+    .interop-panel {
+      margin-top: 1rem;
+      width: 800px;
+      max-width: 100%;
+      background: rgba(0, 10, 30, 0.8);
+      border: 1px solid #1a237e;
+      border-radius: 8px;
+      padding: 1rem 1.5rem;
+    }
+    .interop-panel h3 {
+      font-family: 'Orbitron', monospace;
+      font-size: 0.85rem;
+      color: #7c4dff;
+      margin-bottom: 0.5rem;
+      letter-spacing: 2px;
+    }
+    .interop-row {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+      margin-bottom: 0.4rem;
+    }
+    .interop-btn {
+      background: #1a237e;
+      border: 1px solid #7c4dff;
+      color: #ce93d8;
+      padding: 0.3rem 0.8rem;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.8rem;
+      font-family: monospace;
+    }
+    .interop-btn:hover { background: #283593; }
+    .interop-output {
+      font-family: monospace;
+      font-size: 0.85rem;
+      color: #a5d6a7;
+      background: #000;
+      padding: 0.25rem 0.6rem;
+      border-radius: 4px;
+      border: 1px solid #1b5e20;
+      min-width: 160px;
+    }
+  </style>
+</head>
+<body>
+  <h1>🚀 SPACE DEFENDER</h1>
+  <p class="subtitle">C++ ENGINE → EMSCRIPTEN → WebAssembly → BROWSER</p>
+
+  <div class="hud">
+    <div class="hud-item">
+      <div class="hud-label">Score</div>
+      <div class="hud-value" id="score">0</div>
+    </div>
+    <div class="hud-item">
+      <div class="hud-label">Health</div>
+      <div class="hud-value" id="health">❤❤❤</div>
+    </div>
+    <div class="hud-item">
+      <div class="hud-label">Level</div>
+      <div class="hud-value" id="level">1</div>
+    </div>
+  </div>
+
+  <div class="canvas-wrapper">
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <div id="overlay">
+      <div id="overlayMsg">💥 GAME OVER</div>
+      <button class="restart-btn" onclick="Module._resetGame()">▶ RESTART</button>
+    </div>
+  </div>
+
+  <div class="controls">
+    ← → ↑ ↓ / WASD — Move &nbsp;|&nbsp; SPACE — Fire &nbsp;|&nbsp; R — Restart
+  </div>
+
+  <!-- JS ↔ WASM Interop Demo Panel -->
+  <div class="interop-panel">
+    <h3>⚡ JS ↔ WASM INTEROPERABILITY DEMO</h3>
+    <div class="interop-row">
+      <button class="interop-btn" onclick="queryScore()">Module._getScore()</button>
+      <span class="interop-output" id="out-score">—</span>
+    </div>
+    <div class="interop-row">
+      <button class="interop-btn" onclick="queryHealth()">Module._getHealth()</button>
+      <span class="interop-output" id="out-health">—</span>
+    </div>
+    <div class="interop-row">
+      <button class="interop-btn" onclick="queryLevel()">Module._getLevel()</button>
+      <span class="interop-output" id="out-level">—</span>
+    </div>
+    <div class="interop-row">
+      <button class="interop-btn" onclick="queryPhase()">Module._getPhase()</button>
+      <span class="interop-output" id="out-phase">—</span>
+    </div>
+  </div>
+
+  <script>
+    // JS → WASM: Call exported C++ functions directly
+    function queryScore()  { document.getElementById('out-score') .textContent = Module._getScore();  }
+    function queryHealth() { document.getElementById('out-health').textContent = Module._getHealth(); }
+    function queryLevel()  { document.getElementById('out-level') .textContent = Module._getLevel();  }
+    function queryPhase()  {
+      const phases = ['MENU','PLAYING','PAUSED','BOSS_FIGHT','GAME_OVER','VICTORY'];
+      const p = Module._getPhase();
+      document.getElementById('out-phase').textContent = phases[p] || p;
+    }
+  </script>
+
+  <!-- Load Emscripten-generated glue + WASM module -->
+  <script src="game.js"></script>
+</body>
+</html>
