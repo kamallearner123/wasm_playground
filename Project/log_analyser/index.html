@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Log Analyser — C++ WASM</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Inter', sans-serif; background: #0b0f1a; color: #e2e8f0; min-height: 100vh; padding: 1.5rem; }
+
+    h1 { font-size: 1.7rem; color: #34d399; }
+    .tag { background: #052e16; color: #34d399; border: 1px solid #166534; font-size: 0.7rem; padding: 0.15rem 0.5rem; border-radius: 999px; margin-left: 0.4rem; font-family: 'JetBrains Mono', monospace; }
+    .subtitle { color: #475569; font-size: 0.85rem; margin: 0.3rem 0 1.5rem; }
+
+    /* Drop zone */
+    .drop-zone {
+      border: 2px dashed #1f4035; border-radius: 12px; padding: 2.5rem;
+      text-align: center; cursor: pointer; transition: all 0.2s;
+      background: #0d1a14; margin-bottom: 1.5rem;
+    }
+    .drop-zone:hover, .drop-zone.drag-over {
+      border-color: #34d399; background: #0a1f17;
+      box-shadow: 0 0 20px #34d39922;
+    }
+    .drop-icon { font-size: 2.5rem; margin-bottom: 0.5rem; }
+    .drop-text { color: #94a3b8; font-size: 0.9rem; }
+    .drop-text strong { color: #34d399; }
+    #file-input { display: none; }
+
+    /* Sample log button */
+    .btn-sample {
+      background: transparent; border: 1px solid #1f4035; color: #34d399;
+      padding: 0.4rem 1rem; border-radius: 6px; cursor: pointer; font-size: 0.8rem;
+      margin-top: 0.75rem; transition: background 0.2s;
+    }
+    .btn-sample:hover { background: #052e16; }
+
+    /* Stats grid */
+    .stats-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 0.75rem; margin-bottom: 1.5rem;
+    }
+    .stat-card {
+      background: #111827; border: 1px solid #1f2937; border-radius: 10px;
+      padding: 1rem; text-align: center;
+    }
+    .stat-val { font-family: 'JetBrains Mono', monospace; font-size: 1.8rem; font-weight: 700; }
+    .stat-lbl { font-size: 0.72rem; color: #64748b; margin-top: 0.2rem; }
+    .stat-card.total   .stat-val { color: #e2e8f0; }
+    .stat-card.errors  .stat-val { color: #f87171; }
+    .stat-card.warnings.stat-val { color: #fbbf24; }
+    .stat-card.info    .stat-val { color: #60a5fa; }
+    .stat-card.debug   .stat-val { color: #a78bfa; }
+    .stat-card.fatal   .stat-val { color: #fb923c; }
+
+    /* Health badge */
+    .health {
+      display: inline-block; padding: 0.3rem 1rem; border-radius: 999px;
+      font-weight: 700; font-size: 0.85rem; margin-bottom: 1.25rem;
+    }
+    .health.HEALTHY  { background: #052e16; color: #34d399; border: 1px solid #166534; }
+    .health.WARNING  { background: #431407; color: #fbbf24; border: 1px solid #92400e; }
+    .health.DEGRADED { background: #450a0a; color: #f87171; border: 1px solid #7f1d1d; }
+    .health.CRITICAL { background: #3b0764; color: #e879f9; border: 1px solid #7e22ce; }
+
+    /* Log lines panel */
+    .log-panel {
+      background: #0a0c13; border: 1px solid #1f2937; border-radius: 10px;
+      padding: 1rem; max-height: 320px; overflow-y: auto;
+      font-family: 'JetBrains Mono', monospace; font-size: 0.76rem;
+      line-height: 1.7;
+    }
+    .log-line { padding: 0.1rem 0.4rem; border-radius: 3px; }
+    .log-line.ERROR, .log-line.FATAL    { color: #f87171; background: #450a0a44; }
+    .log-line.WARNING, .log-line.WARN   { color: #fbbf24; background: #45260a44; }
+    .log-line.INFO                       { color: #60a5fa; }
+    .log-line.DEBUG                      { color: #a78bfa; }
+    .log-line.TRACE                      { color: #475569; }
+    .log-line.OTHER                      { color: #374151; }
+
+    /* Filter */
+    .filter-row { display: flex; gap: 0.5rem; margin-bottom: 0.75rem; flex-wrap: wrap; }
+    .filter-btn {
+      background: #1f2937; border: 1px solid #374151; color: #9ca3af;
+      padding: 0.25rem 0.75rem; border-radius: 999px; cursor: pointer; font-size: 0.75rem;
+      transition: all 0.15s;
+    }
+    .filter-btn.active { color: white; }
+    .filter-btn.ALL    { border-color: #4b5563; }
+    .filter-btn.ERROR.active  { background: #7f1d1d; border-color: #f87171; color: #f87171; }
+    .filter-btn.WARNING.active{ background: #78350f; border-color: #fbbf24; color: #fbbf24; }
+    .filter-btn.INFO.active   { background: #1e3a5f; border-color: #60a5fa; color: #60a5fa; }
+    .filter-btn.DEBUG.active  { background: #2e1065; border-color: #a78bfa; color: #a78bfa; }
+
+    /* Wasm status */
+    .wasm-status { display: flex; align-items: center; gap: 0.6rem; font-size: 0.8rem; color: #64748b; margin-bottom: 1rem; }
+    .dot-sm { width: 8px; height: 8px; border-radius: 50%; background: #eab308; }
+    .dot-sm.ok { background: #22c55e; }
+  </style>
+</head>
+<body>
+
+<h1>📋 Log Analyser <span class="tag">C++ WASM</span></h1>
+<p class="subtitle">Drop a log file → C++ WASM module parses it in the browser — zero server uploads.</p>
+
+<div class="wasm-status">
+  <div class="dot-sm" id="wasm-dot"></div>
+  <span id="wasm-status-txt">Loading C++ WASM analyser...</span>
+</div>
+
+<!-- Drop Zone -->
+<div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
+  <div class="drop-icon">📁</div>
+  <div class="drop-text">
+    <strong>Drop a log file here</strong> or click to browse<br>
+    Supports .log, .txt, or any text file
+  </div>
+  <button class="btn-sample" onclick="event.stopPropagation(); loadSample()">
+    ▶ Load Sample Log
+  </button>
+  <input type="file" id="file-input" accept=".log,.txt,text/*">
+</div>
+
+<!-- Stats -->
+<div id="stats-section" style="display:none">
+  <div id="health-badge" class="health HEALTHY">● HEALTHY</div>
+  <div class="stats-grid">
+    <div class="stat-card total">  <div class="stat-val" id="s-total">0</div>   <div class="stat-lbl">Total Lines</div>  </div>
+    <div class="stat-card errors"> <div class="stat-val" id="s-errors">0</div>  <div class="stat-lbl">Errors</div>       </div>
+    <div class="stat-card warnings"><div class="stat-val" id="s-warnings">0</div><div class="stat-lbl">Warnings</div>   </div>
+    <div class="stat-card info">   <div class="stat-val" id="s-info">0</div>    <div class="stat-lbl">Info</div>         </div>
+    <div class="stat-card debug">  <div class="stat-val" id="s-debug">0</div>   <div class="stat-lbl">Debug</div>        </div>
+    <div class="stat-card fatal">  <div class="stat-val" id="s-fatal">0</div>   <div class="stat-lbl">Fatal</div>        </div>
+  </div>
+  <div id="perf-info" style="font-size:.75rem;color:#475569;margin-bottom:.75rem;"></div>
+
+  <!-- Filter & Log View -->
+  <div class="filter-row" id="filter-row">
+    <button class="filter-btn ALL active"     onclick="applyFilter('ALL')">All</button>
+    <button class="filter-btn ERROR"    onclick="applyFilter('ERROR')">Errors</button>
+    <button class="filter-btn WARNING"  onclick="applyFilter('WARNING')">Warnings</button>
+    <button class="filter-btn INFO"     onclick="applyFilter('INFO')">Info</button>
+    <button class="filter-btn DEBUG"    onclick="applyFilter('DEBUG')">Debug</button>
+  </div>
+  <div class="log-panel" id="log-panel"></div>
+</div>
+
+<!-- Load Emscripten WASM module (MODULARIZE=1 → proper async factory) -->
+<script src="build/analyser.js"></script>
+<script>
+let mod   = null;
+let allLines = [];
+
+// ── Init WASM (createAnalyserModule is from MODULARIZE=1) ────────────────
+createAnalyserModule().then(m => {
+    mod = m;
+    mod._analyserInit();
+    document.getElementById('wasm-dot').className = 'dot-sm ok';
+    document.getElementById('wasm-status-txt').textContent =
+        '✅ C++ WASM analyser ready — all parsing runs in your browser';
+}).catch(e => {
+    document.getElementById('wasm-status-txt').textContent = '❌ WASM load failed: ' + e.message;
+});
+
+// ── File Drop & Select ────────────────────────────────────────────────────
+const dz = document.getElementById('drop-zone');
+dz.addEventListener('dragover',  e => { e.preventDefault(); dz.classList.add('drag-over'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
+dz.addEventListener('drop', e => {
+    e.preventDefault(); dz.classList.remove('drag-over');
+    if (e.dataTransfer.files[0]) processFile(e.dataTransfer.files[0]);
+});
+document.getElementById('file-input').addEventListener('change', e => {
+    if (e.target.files[0]) processFile(e.target.files[0]);
+});
+
+function processFile(file) {
+    const reader = new FileReader();
+    reader.onload = e => analyseText(e.target.result, file.name);
+    reader.readAsText(file);
+}
+
+// ── Analyse text using C++ WASM ──────────────────────────────────────────
+function analyseText(text, filename) {
+    if (!mod) { alert('WASM not ready yet'); return; }
+
+    const t0 = performance.now();
+    mod._analyserInit();
+    allLines = text.split('\n').filter(l => l.trim());
+
+    // Feed each line into C++ one at a time
+    for (const line of allLines) {
+        const len = mod.lengthBytesUTF8(line) + 1;
+        const ptr = mod._malloc(len);
+        mod.stringToUTF8(line, ptr, len);
+        mod._analyserFeedLine(ptr);
+        mod._free(ptr);
+    }
+
+    // Get JSON stats from C++
+    const statsPtr  = mod._analyserGetStats();
+    const statsJSON = mod.UTF8ToString(statsPtr);
+    mod._analyserFree(statsPtr);
+
+    const stats  = JSON.parse(statsJSON);
+    const elapsed= (performance.now() - t0).toFixed(1);
+
+    // Update UI
+    document.getElementById('stats-section').style.display = 'block';
+    document.getElementById('s-total').textContent    = stats.total;
+    document.getElementById('s-errors').textContent   = stats.errors;
+    document.getElementById('s-warnings').textContent = stats.warnings;
+    document.getElementById('s-info').textContent     = stats.info;
+    document.getElementById('s-debug').textContent    = stats.debug;
+    document.getElementById('s-fatal').textContent    = stats.fatal;
+
+    const hBadge = document.getElementById('health-badge');
+    hBadge.className = `health ${stats.health}`;
+    hBadge.textContent = `● ${stats.health}`;
+
+    document.getElementById('perf-info').textContent =
+        `"${filename}" — ${allLines.length} lines parsed by C++ WASM in ${elapsed}ms`;
+
+    applyFilter('ALL');
+}
+
+// ── Filter log lines ──────────────────────────────────────────────────────
+function classifyLine(line) {
+    const u = line.toUpperCase();
+    if (u.includes('FATAL') || u.includes('CRITICAL')) return 'FATAL';
+    if (u.includes('ERROR'))   return 'ERROR';
+    if (u.includes('WARN'))    return 'WARNING';
+    if (u.includes('INFO'))    return 'INFO';
+    if (u.includes('DEBUG'))   return 'DEBUG';
+    if (u.includes('TRACE'))   return 'TRACE';
+    return 'OTHER';
+}
+
+function applyFilter(level) {
+    document.querySelectorAll('.filter-btn').forEach(b => {
+        b.classList.toggle('active', b.classList.contains(level) || level === 'ALL');
+    });
+    const panel = document.getElementById('log-panel');
+    const filtered = level === 'ALL' ? allLines : allLines.filter(l => classifyLine(l) === level);
+    panel.innerHTML = filtered.slice(0, 500).map(line => {
+        const lv = classifyLine(line);
+        return `<div class="log-line ${lv}">${escapeHtml(line)}</div>`;
+    }).join('');
+    if (filtered.length > 500)
+        panel.innerHTML += `<div style="color:#475569;padding:.5rem">... and ${filtered.length - 500} more lines</div>`;
+}
+
+function escapeHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── Sample log generator ──────────────────────────────────────────────────
+function loadSample() {
+    const levels = ['INFO','INFO','INFO','DEBUG','WARN','ERROR','FATAL'];
+    const msgs   = [
+        'Server started on port 8080',
+        'Request received: GET /api/users',
+        'Database connection established',
+        'Cache hit for key: user_42',
+        'Response time exceeded threshold: 2500ms',
+        'Failed to connect to upstream service: timeout after 5000ms',
+        'Unhandled exception: NullPointerException at line 142',
+        'Memory usage at 87% capacity',
+        'Retrying request to payment service (attempt 3/3)',
+        'FATAL: Database connection pool exhausted — no connections available',
+        'Authentication token expired for user_id=1042',
+        'INFO: Health check passed',
+        'WARN: Rate limit approaching for IP 192.168.1.105',
+        'ERROR: Invalid JSON payload received from client',
+        'DEBUG: Processing batch job id=batch_20240611',
+    ];
+    const lines = [];
+    for (let i = 0; i < 200; i++) {
+        const d   = new Date(Date.now() - (200 - i) * 5000);
+        const ts  = d.toISOString();
+        const lv  = levels[Math.floor(Math.random() * levels.length)];
+        const msg = msgs[Math.floor(Math.random() * msgs.length)];
+        lines.push(`${ts} [${lv}] ${msg}`);
+    }
+    analyseText(lines.join('\n'), 'sample.log');
+}
+</script>
+</body>
+</html>

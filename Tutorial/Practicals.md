@@ -297,58 +297,64 @@ python3 -m http.server 8080
 ### 🎯 Objective
 Run WASM on a server using Wasmtime, and explicitly grant access to files and environment variables using WASI's capability-based model.
 
-### Step 1: Write the Rust WASI Application
-**File: `lab03/src/main.rs`**
-```rust
-use std::env;
-use std::fs;
-use std::io::Write;
+### Step 1: Write the C++ WASI Application
+**File: `lab03/main.cpp`**
+```cpp
+#include <iostream>
+#include <fstream>
+#include <string>
+#include <cstdlib>
 
-fn main() {
-    println!("=== WASI Lab Demo ===");
+int main(int argc, char* argv[]) {
+    std::cout << "=== WASI Lab Demo ===" << std::endl;
 
     // 1. Reading Environment Variables
     // The host must explicitly export these; WASI can't read arbitrary env vars.
-    let user = env::var("LAB_USER").unwrap_or_else(|_| "Guest".to_string());
-    let mode = env::var("LAB_MODE").unwrap_or_else(|_| "default".to_string());
-    println!("[ENV] User: {}, Mode: {}", user, mode);
+    const char* user_env = std::getenv("LAB_USER");
+    std::string user = user_env ? user_env : "Guest";
+    const char* mode_env = std::getenv("LAB_MODE");
+    std::string mode = mode_env ? mode_env : "default";
+    std::cout << "[ENV] User: " << user << ", Mode: " << mode << std::endl;
 
     // 2. Reading a File (host must grant directory access via --dir flag)
-    let input_path = "data/input.txt";
-    match fs::read_to_string(input_path) {
-        Ok(contents) => println!("[FILE READ] Content:\n{}", contents.trim()),
-        Err(e) => println!("[FILE READ] Error (is --dir granted?): {}", e),
+    std::string input_path = "data/input.txt";
+    std::ifstream infile(input_path);
+    if (infile.is_open()) {
+        std::string contents((std::istreambuf_iterator<char>(infile)), std::istreambuf_iterator<char>());
+        std::cout << "[FILE READ] Content:\n" << contents;
+        infile.close();
+    } else {
+        std::cout << "[FILE READ] Error (is --dir granted?)" << std::endl;
     }
 
     // 3. Writing a File
-    let output_path = "data/output.txt";
-    match fs::File::create(output_path) {
-        Ok(mut file) => {
-            writeln!(file, "Processed by WASI module for user: {}", user).unwrap();
-            println!("[FILE WRITE] Written to {}", output_path);
-        }
-        Err(e) => println!("[FILE WRITE] Error: {}", e),
+    std::string output_path = "data/output.txt";
+    std::ofstream outfile(output_path);
+    if (outfile.is_open()) {
+        outfile << "Processed by WASI module for user: " << user << "\n";
+        std::cout << "[FILE WRITE] Written to " << output_path << std::endl;
+        outfile.close();
+    } else {
+        std::cout << "[FILE WRITE] Error writing to " << output_path << std::endl;
     }
 
     // 4. Reading command-line arguments
-    let args: Vec<String> = env::args().collect();
-    println!("[ARGS] Received {} argument(s): {:?}", args.len() - 1, &args[1..]);
-}
-```
+    std::cout << "[ARGS] Received " << (argc - 1) << " argument(s): [";
+    for (int i = 1; i < argc; ++i) {
+        std::cout << "\"" << argv[i] << "\"";
+        if (i < argc - 1) std::cout << ", ";
+    }
+    std::cout << "]" << std::endl;
 
-**File: `lab03/Cargo.toml`**
-```toml
-[package]
-name = "wasi-lab"
-version = "0.1.0"
-edition = "2021"
+    return 0;
+}
 ```
 
 ### Step 2: Compile to WASI Target
 ```bash
-cd lab03
-rustup target add wasm32-wasip1
-cargo build --target wasm32-wasip1
+mkdir -p lab03
+# Emscripten automatically outputs a WASI executable with -s STANDALONE_WASM
+em++ lab03/main.cpp -O2 -s STANDALONE_WASM -o lab03/wasi-lab.wasm
 ```
 
 ### Step 3: Prepare Test Data
@@ -361,13 +367,15 @@ Line 3: No access beyond what is granted." > lab03/data/input.txt
 
 ### Step 4: Run — WITHOUT File Access (Default Deny)
 ```bash
-wasmtime lab03/target/wasm32-wasip1/debug/wasi-lab.wasm
+wasmtime lab03/wasi-lab.wasm
 ```
 **Output:**
 ```
 === WASI Lab Demo ===
 [ENV] User: Guest, Mode: default
-[FILE READ] Error (is --dir granted?): failed to find a pre-opened file descriptor...
+[FILE READ] Error (is --dir granted?)
+[FILE WRITE] Error writing to data/output.txt
+[ARGS] Received 0 argument(s): []
 ```
 ✅ The module cannot read files unless we explicitly grant access.
 
@@ -377,7 +385,7 @@ wasmtime \
   --env LAB_USER=Kamal \
   --env LAB_MODE=production \
   --dir lab03/data::data \
-  lab03/target/wasm32-wasip1/debug/wasi-lab.wasm -- arg1 arg2
+  lab03/wasi-lab.wasm -- arg1 arg2
 ```
 
 **Explanation of flags:**

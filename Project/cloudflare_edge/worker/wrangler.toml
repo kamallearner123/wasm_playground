@@ -1,0 +1,31 @@
+# Cloudflare Workers — wrangler.toml
+# This file configures how wrangler deploys your Worker.
+# To deploy for real: wrangler publish
+
+name       = "cpp-wasm-edge-handler"
+main       = "worker/worker.js"
+account_id = "YOUR_CLOUDFLARE_ACCOUNT_ID"   # Replace with real ID
+compatibility_date = "2024-01-01"
+
+# ── WASM Module Binding ──────────────────────────
+# This tells Cloudflare to bundle edge_handler.wasm with the Worker.
+# Inside worker.js, it is accessed as the global `EDGE_HANDLER`.
+[wasm_modules]
+EDGE_HANDLER = "build/edge_handler.wasm"
+
+# ── Routes ──────────────────────────────────────
+# Map your Worker to a domain/path pattern.
+# Replace with your actual zone and route.
+[[routes]]
+pattern = "example.com/api/*"
+zone_name = "example.com"
+
+# ── Environment Variables ─────────────────────
+[vars]
+ENVIRONMENT = "production"
+VERSION     = "1.0.0"
+
+# ── Development settings ─────────────────────
+[dev]
+port = 8787       # Local wrangler dev server port
+local_protocol = "http"

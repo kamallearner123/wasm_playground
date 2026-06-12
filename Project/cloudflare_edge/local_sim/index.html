@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CF Edge Simulator — C++ WASM API Tester</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: #0f1117;
+      color: #e2e8f0;
+      min-height: 100vh;
+      padding: 2rem;
+    }
+
+    header { margin-bottom: 2rem; }
+    h1 { font-size: 1.8rem; color: #f6821f; font-weight: 700; }
+    .badge {
+      display: inline-block; background: #1e293b; border: 1px solid #f6821f44;
+      color: #f6821f; font-size: 0.72rem; padding: 0.2rem 0.6rem;
+      border-radius: 999px; margin-left: 0.5rem; vertical-align: middle;
+    }
+    p.subtitle { color: #64748b; margin-top: 0.3rem; font-size: 0.9rem; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+      gap: 1.25rem;
+      margin-bottom: 2rem;
+    }
+
+    .card {
+      background: #1a1f2e;
+      border: 1px solid #2d3748;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .card-header {
+      padding: 0.75rem 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      border-bottom: 1px solid #2d3748;
+    }
+
+    .method {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.72rem;
+      font-weight: 600;
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+    }
+    .get  { background: #1d4ed844; color: #60a5fa; }
+    .post { background: #16a34a44; color: #4ade80; }
+
+    .endpoint-path {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.85rem;
+      color: #94a3b8;
+    }
+
+    .card-body { padding: 1rem; }
+
+    .input-group {
+      margin-bottom: 0.75rem;
+    }
+    label { font-size: 0.78rem; color: #64748b; display: block; margin-bottom: 0.25rem; }
+    input, textarea {
+      width: 100%;
+      background: #0f1117;
+      border: 1px solid #2d3748;
+      border-radius: 6px;
+      color: #e2e8f0;
+      padding: 0.45rem 0.7rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.82rem;
+    }
+    textarea { height: 64px; resize: vertical; }
+
+    button {
+      width: 100%;
+      background: #f6821f;
+      color: #000;
+      border: none;
+      border-radius: 6px;
+      padding: 0.55rem;
+      font-weight: 700;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: background 0.2s;
+      margin-bottom: 0.75rem;
+    }
+    button:hover { background: #e07318; }
+
+    .response-box {
+      background: #0a0d14;
+      border: 1px solid #1e293b;
+      border-radius: 6px;
+      padding: 0.6rem 0.8rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.78rem;
+      color: #4ade80;
+      white-space: pre-wrap;
+      word-break: break-all;
+      min-height: 48px;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    .response-box.error { color: #f87171; }
+    .response-box.loading { color: #64748b; }
+
+    .status-bar {
+      font-size: 0.72rem;
+      color: #475569;
+      margin-bottom: 0.4rem;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .stats-panel {
+      background: #1a1f2e;
+      border: 1px solid #2d3748;
+      border-radius: 12px;
+      padding: 1rem 1.5rem;
+      margin-bottom: 2rem;
+    }
+    .stats-panel h3 { color: #f6821f; font-size: 0.9rem; margin-bottom: 0.75rem; letter-spacing: 1px; }
+    .stats-row { display: flex; gap: 2rem; flex-wrap: wrap; }
+    .stat { text-align: center; }
+    .stat-val { font-family: 'JetBrains Mono', monospace; font-size: 1.3rem; color: #60a5fa; font-weight: 700; }
+    .stat-lbl { font-size: 0.7rem; color: #475569; }
+
+    .arch-note {
+      background: #0d1424;
+      border: 1px solid #1d4ed844;
+      border-radius: 8px;
+      padding: 1rem;
+      font-size: 0.8rem;
+      color: #64748b;
+      line-height: 1.8;
+    }
+    .arch-note code {
+      background: #1e293b;
+      color: #60a5fa;
+      padding: 0.1rem 0.35rem;
+      border-radius: 3px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>☁️ Cloudflare Edge Simulator <span class="badge">C++ → WASM</span></h1>
+    <p class="subtitle">Local simulation of a Cloudflare Worker backed by C++ compiled to WebAssembly</p>
+  </header>
+
+  <div class="stats-panel">
+    <h3>⚡ EDGE RUNTIME STATS</h3>
+    <div class="stats-row">
+      <div class="stat"><div class="stat-val" id="total-req">0</div><div class="stat-lbl">Total Requests</div></div>
+      <div class="stat"><div class="stat-val" id="runtime-tag">C++ WASM</div><div class="stat-lbl">Runtime</div></div>
+      <div class="stat"><div class="stat-val" id="status-ind">🟢</div><div class="stat-lbl">Status</div></div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <!-- Hello -->
+    <div class="card" id="card-hello">
+      <div class="card-header">
+        <span class="method get">GET</span>
+        <span class="endpoint-path">/api/hello</span>
+      </div>
+      <div class="card-body">
+        <div class="input-group">
+          <label>?name=</label>
+          <input type="text" id="hello-name" placeholder="World" value="Kamal">
+        </div>
+        <button onclick="callHello()">Send Request →</button>
+        <div class="status-bar"><span id="hello-status"></span><span id="hello-time"></span></div>
+        <div class="response-box" id="hello-resp">Click to call C++ endpoint...</div>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="card">
+      <div class="card-header">
+        <span class="method get">GET</span>
+        <span class="endpoint-path">/api/stats</span>
+      </div>
+      <div class="card-body">
+        <button onclick="callStats()" style="margin-top:1.5rem">Send Request →</button>
+        <div class="status-bar"><span id="stats-status"></span><span id="stats-time"></span></div>
+        <div class="response-box" id="stats-resp">Click to query C++ stats...</div>
+      </div>
+    </div>
+
+    <!-- Echo -->
+    <div class="card">
+      <div class="card-header">
+        <span class="method post">POST</span>
+        <span class="endpoint-path">/api/echo</span>
+      </div>
+      <div class="card-body">
+        <div class="input-group">
+          <label>Request Body</label>
+          <textarea id="echo-body">{"hello":"from the browser"}</textarea>
+        </div>
+        <button onclick="callEcho()">Send Request →</button>
+        <div class="status-bar"><span id="echo-status"></span><span id="echo-time"></span></div>
+        <div class="response-box" id="echo-resp">Click to echo via C++...</div>
+      </div>
+    </div>
+
+    <!-- Hash -->
+    <div class="card">
+      <div class="card-header">
+        <span class="method get">GET</span>
+        <span class="endpoint-path">/api/hash</span>
+      </div>
+      <div class="card-body">
+        <div class="input-group">
+          <label>?value=</label>
+          <input type="text" id="hash-val" placeholder="hello world" value="WebAssembly">
+        </div>
+        <button onclick="callHash()">Send Request →</button>
+        <div class="status-bar"><span id="hash-status"></span><span id="hash-time"></span></div>
+        <div class="response-box" id="hash-resp">Click to hash with FNV-1a in C++...</div>
+      </div>
+    </div>
+
+    <!-- Fibonacci -->
+    <div class="card">
+      <div class="card-header">
+        <span class="method get">GET</span>
+        <span class="endpoint-path">/api/fibonacci</span>
+      </div>
+      <div class="card-body">
+        <div class="input-group">
+          <label>?n= (0–50)</label>
+          <input type="number" id="fib-n" value="30" min="0" max="50">
+        </div>
+        <button onclick="callFib()">Send Request →</button>
+        <div class="status-bar"><span id="fib-status"></span><span id="fib-time"></span></div>
+        <div class="response-box" id="fib-resp">Click to compute in C++...</div>
+      </div>
+    </div>
+
+    <!-- Rate Limit -->
+    <div class="card">
+      <div class="card-header">
+        <span class="method get">GET</span>
+        <span class="endpoint-path">/api/rate-limit</span>
+      </div>
+      <div class="card-body">
+        <button onclick="callRateLimit()" style="margin-top:1.5rem">Send Request →</button>
+        <div class="status-bar"><span id="rate-status"></span><span id="rate-time"></span></div>
+        <div class="response-box" id="rate-resp">Click to check rate limit...</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="arch-note">
+    <strong>How this works:</strong> Each button click sends a real HTTP request to the local Node.js server
+    (<code>local_sim/server.js</code>). The server loads <code>edge_handler.wasm</code> (compiled from C++) 
+    using the Node.js WebAssembly API, writes the request data into WASM linear memory, calls 
+    <code>edgeHandle()</code> (a C++ function), reads the result back from memory, and returns it as JSON. 
+    This is identical to how a real Cloudflare Worker would invoke the WASM module at the edge.
+  </div>
+
+  <script>
+    const BASE = 'http://localhost:8082';
+
+    async function call(method, path, body, statusId, timeId, respId) {
+        const box = document.getElementById(respId);
+        box.className = 'response-box loading';
+        box.textContent = 'Calling C++ via WASM...';
+        const t0 = performance.now();
+        try {
+            const opts = { method, headers: { 'Content-Type': 'application/json' } };
+            if (body) opts.body = body;
+            const res  = await fetch(BASE + path, opts);
+            const json = await res.json();
+            const ms   = (performance.now() - t0).toFixed(1);
+            box.className = res.ok ? 'response-box' : 'response-box error';
+            box.textContent = JSON.stringify(json, null, 2);
+            document.getElementById(statusId).textContent = `HTTP ${res.status}`;
+            document.getElementById(timeId).textContent   = `${ms}ms`;
+            // Update total requests
+            const cnt = res.headers.get('X-Request-Count');
+            if (cnt) document.getElementById('total-req').textContent = cnt;
+        } catch (e) {
+            box.className = 'response-box error';
+            box.textContent = `Error: ${e.message}\n(Is the local server running on port 8082?)`;
+        }
+    }
+
+    function callHello()     { call('GET',  `/api/hello?name=${document.getElementById('hello-name').value}`, null, 'hello-status','hello-time','hello-resp'); }
+    function callStats()     { call('GET',  '/api/stats', null, 'stats-status','stats-time','stats-resp'); }
+    function callEcho()      { call('POST', '/api/echo',  document.getElementById('echo-body').value, 'echo-status','echo-time','echo-resp'); }
+    function callHash()      { call('GET',  `/api/hash?value=${document.getElementById('hash-val').value}`, null, 'hash-status','hash-time','hash-resp'); }
+    function callFib()       { call('GET',  `/api/fibonacci?n=${document.getElementById('fib-n').value}`, null, 'fib-status','fib-time','fib-resp'); }
+    function callRateLimit() { call('GET',  '/api/rate-limit', null, 'rate-status','rate-time','rate-resp'); }
+  </script>
+</body>
+</html>

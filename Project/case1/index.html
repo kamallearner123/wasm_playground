@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Case 1 — Browser WASM Runtime: Calculator & Fibonacci</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Inter', sans-serif; background: #0c0e1a; color: #e2e8f0; min-height: 100vh; padding: 1.5rem; }
+
+    h1 { font-size: 1.7rem; color: #818cf8; margin-bottom: 0.2rem; }
+    .tag { background: #1e1b4b; color: #818cf8; border: 1px solid #3730a3; font-size: 0.7rem; padding: 0.15rem 0.5rem; border-radius: 999px; margin-left: 0.4rem; vertical-align: middle; font-family: 'JetBrains Mono', monospace; }
+    .subtitle { color: #475569; font-size: 0.85rem; margin-bottom: 1.5rem; }
+
+    /* Flow diagram */
+    .flow {
+      display: flex; align-items: center; gap: 0; flex-wrap: wrap;
+      background: #0f1424; border: 1px solid #1e293b; border-radius: 10px;
+      padding: 1rem 1.5rem; margin-bottom: 1.5rem; font-size: 0.78rem;
+    }
+    .flow-step {
+      display: flex; flex-direction: column; align-items: center; text-align: center;
+      padding: 0.5rem 0.8rem;
+    }
+    .flow-icon { font-size: 1.4rem; margin-bottom: 0.2rem; }
+    .flow-label { color: #94a3b8; font-size: 0.7rem; max-width: 90px; line-height: 1.3; }
+    .flow-label strong { color: #818cf8; display: block; margin-bottom: 0.1rem; }
+    .flow-arrow { color: #334155; font-size: 1.2rem; padding: 0 0.25rem; align-self: center; }
+
+    /* Status bar */
+    .status-bar {
+      display: flex; align-items: center; gap: 0.6rem;
+      background: #0f172a; border: 1px solid #1e293b; border-radius: 8px;
+      padding: 0.6rem 1rem; margin-bottom: 1.5rem; font-size: 0.82rem;
+    }
+    .dot { width: 10px; height: 10px; border-radius: 50%; background: #334155; }
+    .dot.green { background: #22c55e; box-shadow: 0 0 8px #22c55e88; }
+    .dot.yellow { background: #eab308; animation: pulse 1s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+    #status-text { color: #94a3b8; }
+    #load-time { margin-left: auto; font-family: 'JetBrains Mono', monospace; color: #475569; font-size: 0.75rem; }
+
+    /* Grid */
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; }
+    @media (max-width: 700px) { .grid { grid-template-columns: 1fr; } }
+
+    .card { background: #111827; border: 1px solid #1f2937; border-radius: 12px; overflow: hidden; }
+    .card-header { padding: 0.75rem 1rem; border-bottom: 1px solid #1f2937; display: flex; align-items: center; gap: 0.5rem; }
+    .card-title { font-weight: 600; color: #c7d2fe; font-size: 0.95rem; }
+    .card-body { padding: 1.25rem; }
+
+    label { display: block; font-size: 0.75rem; color: #64748b; margin-bottom: 0.25rem; }
+    input, select {
+      width: 100%; background: #0c0e1a; border: 1px solid #1f2937; border-radius: 6px;
+      color: #e2e8f0; padding: 0.45rem 0.7rem; font-family: 'JetBrains Mono', monospace;
+      font-size: 0.85rem; margin-bottom: 0.75rem;
+    }
+    .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
+
+    button {
+      width: 100%; background: #4f46e5; color: white; border: none; border-radius: 6px;
+      padding: 0.55rem; font-weight: 600; font-size: 0.85rem; cursor: pointer;
+      transition: background 0.15s; margin-bottom: 0.75rem;
+    }
+    button:hover { background: #4338ca; }
+    button:disabled { background: #1e293b; color: #475569; cursor: not-allowed; }
+
+    .result {
+      background: #0c0e1a; border: 1px solid #1f2937; border-radius: 6px;
+      padding: 0.6rem 0.8rem; font-family: 'JetBrains Mono', monospace;
+      font-size: 1rem; color: #818cf8; min-height: 38px;
+    }
+    .result.error { color: #f87171; }
+    .exec-info { font-size: 0.7rem; color: #334155; margin-top: 0.3rem; }
+
+    /* Fib sequence */
+    .fib-seq { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.75rem; }
+    .fib-badge {
+      background: #1e1b4b; border: 1px solid #3730a3; color: #818cf8;
+      font-family: 'JetBrains Mono', monospace; font-size: 0.72rem;
+      padding: 0.15rem 0.45rem; border-radius: 4px;
+    }
+    .fib-badge.highlight { background: #4f46e5; color: white; border-color: #6366f1; }
+
+    /* Code panel */
+    .code-block {
+      background: #050709; border: 1px solid #1e293b; border-radius: 8px;
+      padding: 1rem; font-family: 'JetBrains Mono', monospace; font-size: 0.76rem;
+      color: #94a3b8; line-height: 1.7; margin-top: 1.25rem; overflow-x: auto;
+    }
+    .kw  { color: #c084fc; }
+    .fn  { color: #60a5fa; }
+    .cm  { color: #374151; font-style: italic; }
+    .str { color: #86efac; }
+    .num { color: #fb923c; }
+  </style>
+</head>
+<body>
+
+<h1>Case 1: Browser WASM Runtime <span class="tag">C++ → .wasm</span></h1>
+<p class="subtitle">The .wasm module is downloaded by the browser via <code>fetch()</code> and executed inside the browser's built-in WebAssembly runtime — no server, no plugins.</p>
+
+<!-- Flow Diagram -->
+<div class="flow">
+  <div class="flow-step"><div class="flow-icon">📄</div><div class="flow-label"><strong>math.cpp</strong>C++ source</div></div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-step"><div class="flow-icon">⚙️</div><div class="flow-label"><strong>emcc</strong>Emscripten compiler</div></div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-step"><div class="flow-icon">📦</div><div class="flow-label"><strong>math.wasm</strong>binary on server</div></div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-step"><div class="flow-icon">🌐</div><div class="flow-label"><strong>fetch()</strong>browser downloads</div></div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-step"><div class="flow-icon">🔧</div><div class="flow-label"><strong>WASM Runtime</strong>browser executes</div></div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-step"><div class="flow-icon">✅</div><div class="flow-label"><strong>JS calls C++</strong>instance.exports.add()</div></div>
+</div>
+
+<!-- Status -->
+<div class="status-bar">
+  <div class="dot yellow" id="dot"></div>
+  <span id="status-text">Downloading math.wasm from server...</span>
+  <span id="load-time"></span>
+</div>
+
+<div class="grid">
+  <!-- Calculator -->
+  <div class="card">
+    <div class="card-header">🧮 <span class="card-title">Calculator</span></div>
+    <div class="card-body">
+      <div class="row2">
+        <div><label>Operand A</label><input type="number" id="ca" value="42"></div>
+        <div><label>Operand B</label><input type="number" id="cb" value="8"></div>
+      </div>
+      <label>Operation</label>
+      <select id="cop">
+        <option value="add">Add (a + b)</option>
+        <option value="subtract">Subtract (a - b)</option>
+        <option value="multiply">Multiply (a × b)</option>
+        <option value="divide">Divide (a ÷ b)</option>
+        <option value="power">Power (aᵇ)</option>
+        <option value="modulo">Modulo (a % b)</option>
+      </select>
+      <button id="calc-btn" onclick="runCalc()" disabled>⟳ Loading WASM...</button>
+      <div class="result" id="calc-result">—</div>
+      <div class="exec-info" id="calc-info"></div>
+    </div>
+  </div>
+
+  <!-- Fibonacci -->
+  <div class="card">
+    <div class="card-header">🌀 <span class="card-title">Fibonacci</span></div>
+    <div class="card-body">
+      <label>Compute fibonacci(N) — iterative C++ (N up to 70)</label>
+      <input type="number" id="fn" value="20" min="0" max="70">
+      <button id="fib-btn" onclick="runFib()" disabled>⟳ Loading WASM...</button>
+      <div class="result" id="fib-result">—</div>
+      <div class="exec-info" id="fib-info"></div>
+      <div class="fib-seq" id="fib-seq"></div>
+
+      <br>
+      <label>Recursive Fibonacci (small N only, max 35)</label>
+      <input type="number" id="fn-rec" value="15" min="0" max="35">
+      <button onclick="runFibRec()" id="fib-rec-btn" disabled>Run Recursive</button>
+      <div class="result" id="fib-rec-result">—</div>
+      <div class="exec-info" id="fib-rec-info"></div>
+    </div>
+  </div>
+
+  <!-- Prime & Factorial -->
+  <div class="card">
+    <div class="card-header">🔢 <span class="card-title">Prime Check & Factorial</span></div>
+    <div class="card-body">
+      <label>Check if N is prime</label>
+      <input type="number" id="pn" value="97">
+      <button onclick="runPrime()" id="prime-btn" disabled>Check Prime</button>
+      <div class="result" id="prime-result">—</div>
+      <br>
+      <label>Factorial (N up to 20)</label>
+      <input type="number" id="facn" value="12" min="0" max="20">
+      <button onclick="runFact()" id="fact-btn" disabled>Compute N!</button>
+      <div class="result" id="fact-result">—</div>
+    </div>
+  </div>
+
+  <!-- How it works -->
+  <div class="card">
+    <div class="card-header">📖 <span class="card-title">How the Browser Loads WASM</span></div>
+    <div class="card-body">
+      <div class="code-block"><span class="cm">// 1. Browser fetches the .wasm binary over HTTP</span>
+<span class="kw">const</span> response = <span class="kw">await</span> <span class="fn">fetch</span>(<span class="str">'math.wasm'</span>);
+
+<span class="cm">// 2. Browser's built-in WASM runtime compiles &amp; instantiates</span>
+<span class="kw">const</span> { instance } = <span class="kw">await</span>
+  WebAssembly.<span class="fn">instantiateStreaming</span>(response, {
+    <span class="str">wasi_snapshot_preview1</span>: wasiImports
+  });
+
+<span class="cm">// 3. Call C++ functions directly from JS</span>
+<span class="kw">const</span> result = instance.exports.add(<span class="num">10</span>, <span class="num">20</span>); <span class="cm">// → 30</span>
+<span class="kw">const</span> fib    = instance.exports.fibonacci(<span class="num">20</span>);  <span class="cm">// → 6765</span></div>
+      <div id="wasm-size-info" style="margin-top:.75rem;font-size:.75rem;color:#475569;">Loading WASM binary info...</div>
+    </div>
+  </div>
+</div>
+
+<script>
+let wasm = null;
+
+// ── Load math.wasm using the browser's built-in WebAssembly API ─────────────
+const t0 = performance.now();
+
+// WASI stub — our pure math module doesn't use OS calls,
+// but STANDALONE_WASM still requires these imports to be declared.
+const wasiImports = {
+    wasi_snapshot_preview1: {
+        proc_exit:         () => {},
+        fd_write:          () => 0,
+        fd_read:           () => 0,
+        fd_close:          () => 0,
+        fd_seek:           () => 0,
+        environ_get:       () => 0,
+        environ_sizes_get: () => 0,
+        clock_time_get:    () => 0,
+    }
+};
+
+// This is the key line: fetch() downloads the .wasm file,
+// WebAssembly.instantiateStreaming() compiles and runs it in the browser.
+WebAssembly.instantiateStreaming(fetch('math.wasm'), wasiImports)
+    .then(({ instance }) => {
+        wasm = instance.exports;
+        const loadMs = (performance.now() - t0).toFixed(1);
+
+        document.getElementById('dot').className = 'dot green';
+        document.getElementById('status-text').textContent =
+            '✅ math.wasm loaded — C++ functions running in browser WASM runtime';
+        document.getElementById('load-time').textContent = `Loaded in ${loadMs}ms`;
+
+        // Enable all buttons
+        ['calc-btn','fib-btn','fib-rec-btn','prime-btn','fact-btn']
+            .forEach(id => {
+                const btn = document.getElementById(id);
+                btn.disabled = false;
+                btn.textContent = btn.textContent.replace('⟳ Loading WASM...','▶ Calculate');
+            });
+
+        // Fetch .wasm file size info
+        fetch('math.wasm').then(r => r.arrayBuffer()).then(buf => {
+            document.getElementById('wasm-size-info').innerHTML =
+                `<strong style="color:#818cf8">math.wasm</strong> — ${buf.byteLength} bytes downloaded by browser &amp; compiled by browser's WASM runtime`;
+        });
+
+        runCalc(); runFib();
+    })
+    .catch(err => {
+        document.getElementById('status-text').textContent = '❌ Failed: ' + err.message;
+        document.getElementById('dot').style.background = '#ef4444';
+    });
+
+// ── Calculator ──────────────────────────────────────────────────────────────
+function runCalc() {
+    if (!wasm) return;
+    const a   = parseFloat(document.getElementById('ca').value) || 0;
+    const b   = parseFloat(document.getElementById('cb').value) || 0;
+    const op  = document.getElementById('cop').value;
+    const t   = performance.now();
+    let result, label;
+    switch (op) {
+        case 'add':      result = wasm.add(a, b);      label = `${a} + ${b}`; break;
+        case 'subtract': result = wasm.subtract(a, b); label = `${a} - ${b}`; break;
+        case 'multiply': result = wasm.multiply(a, b); label = `${a} × ${b}`; break;
+        case 'divide':   result = wasm.divide(a, b);   label = `${a} ÷ ${b}`; break;
+        case 'power':    result = wasm.power(a, Math.round(b)); label = `${a}^${b}`; break;
+        case 'modulo':   result = wasm.modulo(Math.round(a), Math.round(b)); label = `${a} % ${b}`; break;
+    }
+    const ms = (performance.now() - t).toFixed(3);
+    document.getElementById('calc-result').textContent = `${label} = ${result}`;
+    document.getElementById('calc-info').textContent   = `Executed in C++ WASM in ${ms}ms`;
+}
+
+// ── Fibonacci ───────────────────────────────────────────────────────────────
+function runFib() {
+    if (!wasm) return;
+    const n  = Math.min(70, parseInt(document.getElementById('fn').value) || 0);
+    const t  = performance.now();
+    const r  = wasm.fibonacci(n);
+    const ms = (performance.now() - t).toFixed(3);
+    document.getElementById('fib-result').textContent = `fibonacci(${n}) = ${r}`;
+    document.getElementById('fib-info').textContent   = `Iterative C++ in ${ms}ms`;
+
+    // Show sequence
+    const seqEl = document.getElementById('fib-seq');
+    seqEl.innerHTML = '';
+    const limit = Math.min(n, 20);
+    for (let i = 0; i <= limit; i++) {
+        const v  = wasm.fibonacci(i);
+        const el = document.createElement('span');
+        el.className = 'fib-badge' + (i === n ? ' highlight' : '');
+        el.textContent = v;
+        seqEl.appendChild(el);
+    }
+    if (n > 20) {
+        const el = document.createElement('span');
+        el.className = 'fib-badge';
+        el.textContent = `…f(${n})=${r}`;
+        seqEl.appendChild(el);
+    }
+}
+
+function runFibRec() {
+    if (!wasm) return;
+    const n  = Math.min(35, parseInt(document.getElementById('fn-rec').value) || 0);
+    const t  = performance.now();
+    const r  = wasm.fibonacci_recursive(n);
+    const ms = (performance.now() - t).toFixed(3);
+    document.getElementById('fib-rec-result').textContent = `fibonacci_recursive(${n}) = ${r}`;
+    document.getElementById('fib-rec-info').textContent   = `Recursive C++ in ${ms}ms`;
+}
+
+function runPrime() {
+    if (!wasm) return;
+    const n = parseInt(document.getElementById('pn').value) || 0;
+    const r = wasm.is_prime(n);
+    document.getElementById('prime-result').textContent =
+        r ? `✅ ${n} is PRIME` : `❌ ${n} is NOT prime`;
+}
+
+function runFact() {
+    if (!wasm) return;
+    const n = Math.min(20, parseInt(document.getElementById('facn').value) || 0);
+    const r = wasm.factorial(n);
+    document.getElementById('fact-result').textContent = `${n}! = ${r}`;
+}
+</script>
+</body>
+</html>
